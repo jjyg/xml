@@ -1,0 +1,20 @@
+Pure ruby xml library
+
+Parser / xml generator
+
+sample usage:
+
+require './xml'
+
+root = Xml.parse_file('foo.xml')
+
+# search for a subtag <bla some_attr="0">
+if mytag = root.find('bla') { |tag| tag['some_attr'] == '0' }
+	# add a child node to bla
+	mytag << Xml::Tag.new('foo', { 'key' => 'value' })
+	# add a string
+	mytag << "lolz"
+end
+
+puts root
+# <?xml version="1.0" encoding="us-ascii" ?><bla some_attr="0"><foo key="value></foo>lolz</bla>
