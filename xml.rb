@@ -320,7 +320,7 @@ class Parser
 				break if @str[@off] == ?<
 				e << getc
 			end
-			e
+			Xml.entities_decode(e)
 		end
 	end
 
