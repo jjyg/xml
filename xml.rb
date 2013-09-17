@@ -8,11 +8,10 @@ module Xml
 		'>' => '&gt;',
 		'<' => '&lt;',
 		'"' => '&quot;',
-		'&' => '&amp;',
 	}
-	EntitiesRE = Regexp.new('(' + Entities.keys.join('|') + ')')
+	EntitiesRE = Regexp.new('(' << Entities.keys.join('|') << ')')
 	EntitiesDec = Entities.invert
-	EntitiesDecRE = Regexp.new('(' + EntitiesDec.keys.join('|') + ')')
+	EntitiesDecRE = Regexp.new('(' << EntitiesDec.keys.join('|') << ')', Regexp::IGNORECASE)
 
 	def self.entities_encode(str)
 		str.to_s.gsub(EntitiesRE) { |x| Entities.fetch(x, x) }
