@@ -125,7 +125,9 @@ class Tag
 				when ::String; Xml.entities_encode(c)
 				else "\n" << indent << '  ' << c.to_s
 				end
-			}.join << "\n" << indent << '</' << @name << '>'
+			}.join
+			s << "\n" << indent unless @children.last.kind_of?(::String)
+			s << '</' << @name << '>'
 		else
 			s << @children.map { |c| c.to_s }.join + '</' + @name + '>'
 		end
