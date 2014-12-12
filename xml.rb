@@ -119,7 +119,7 @@ class Tag
 		if @uniq
 			s
 		elsif length(s) > 80
-			s << @children.map{ |c|
+			s << @children.map { |c|
 				case c
 				when Tag; "\n" << c.to_s(indent + '  ')
 				when ::String; Xml.entities_encode(c)
@@ -205,8 +205,23 @@ class Parser
 	# add data to be parsed
 	def feed(str)
 		@str << str
-		# discard BOM marker
-		@off = 3 if @off == 0 and @str[0, 3] == "\xef\xbb\xbf"
+		@str.force_encoding('binary') if @str.respond_to?(:force_encoding)
+		if @off == 0 and @str[0, 3] == [0xef, 0xbb, 0xbf].pack('C*')
+			# discard UTF-8 BOM marker
+			@off = 3
+		elsif @off == 0 and (@str[0, 2] == [0xff, 0xfe].pack('C*') or @str[0, 2] == [0x3c, 0x00].pack('C*'))
+			# downgrade UTF-16 (with or without BOM)
+			if @str.respond_to?(:encoding)
+				@str = @str.force_encoding('utf-16le').encode('utf-8').force_encoding('binary')
+			else
+				# rb1.8 compat?
+				if @str[0, 2] == [0xff, 0xfe].pack('C*')
+					# skip BOM
+					@str = @str[2..-1]
+				end
+				@str = @str.unpack('v*').map { |c| (c < 0 || c > 255) ? 63 : c }.pack('C*')
+			end
+		end
 		self
 	end
 
