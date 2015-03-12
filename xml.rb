@@ -129,12 +129,12 @@ class Tag
 			s << "\n" << indent unless @children.last.kind_of?(::String)
 			s << '</' << @name << '>'
 		else
-			s << @children.map { |c| c.to_s }.join + '</' + @name + '>'
+			s << @children.map { |c| c.to_s }.join << '</' << @name << '>'
 		end
 	end
 
 	def inspect
-		'<' + @name + (@children.empty? ? '/' : @children.map { |c| "\n " + c.inspect.gsub("\n", "\n ") }.join + "\n /" + @name) + '>'
+		'<' << @name << (@children.empty? ? '/' : @children.map { |c| "\n " << c.inspect.gsub("\n", "\n ") }.join << "\n /" << @name) << '>'
 	end
 
 	# iterate
@@ -158,9 +158,10 @@ end
 
 # same as an xml node, but add a '<?xml ?>' header to the tag
 class Document < Tag
-	attr_accessor :encoding, :version
+	attr_accessor :encoding, :version, :misc
 	def to_s
 		"<?xml version=\"#{Xml.entities_encode(version || '1.0')}\" encoding=\"#{Xml.entities_encode(encoding || 'us-ascii')}\"?>\n"+
+		misc.to_a.map { |m| "#{m}\n" }.join +
 		super()
 	end
 end
@@ -230,27 +231,34 @@ class Parser
 	# raise on syntax errors
 	def parse_xml
 		parse_stack = []
+		@root = Document.new(nil)
+		seen_root = false
 
 		while @off < @str.length
 			case e = parse_element
 			when String
 				# ignore newlines / indentation between tags
 				next if e =~ /\A\s*\Z/m
-				raise self, "string #{e[0, 8].inspect} outside of a tag" if parse_stack.empty?
-
-				parse_stack.last.children << e.strip
+				if parse_stack.empty?
+					(@root.misc ||= []) << e.strip
+				else
+					parse_stack.last.children << e.strip
+				end
 
 			when Comment
-				raise self, "comment outside of a tag" if parse_stack.empty?
-				parse_stack.last.children << e
+				if parse_stack.empty?
+					(@root.misc ||= []) << e
+				else
+					parse_stack.last.children << e
+				end
 
 			when Tag
 				case e.name
 				when '?xml'
 					raise self, "invalid <?xml> tag" if not parse_stack.empty?
-					raise self, "multiple <?xml> root tags" if @root
+					raise self, "multiple <?xml> root tags" if seen_root
+					seen_root = true
 
-					@root = Document.new(nil)
 					@root.version  = e['version']  if e['version']
 					@root.encoding = e['encoding'] if e['encoding']
 
@@ -267,16 +275,11 @@ class Parser
 					raise self, "invalid tag name #{e}" if e.name !~ /^[a-zA-Z]\w*$/
 
 					if parse_stack.empty?
-						if @root
-							# we already parsed an <?xml> tag, update it
-							raise self, "multiple roots?" if @root.name
-							@root.name = e.name
-							@root.attrs = e.attrs
-							@root.uniq = e.uniq
-							e = @root
-						else
-							@root = e
-						end
+						raise self, "multiple roots?" if @root.name
+						@root.name = e.name
+						@root.attrs = e.attrs
+						@root.uniq = e.uniq
+						e = @root
 					else
 						parse_stack.last.children << e
 					end
@@ -307,7 +310,7 @@ class Parser
 			if tag.name == '!--'
 				# xml comment
 				cmt = '' << getc << getc
-				while @off < @str.length and @str[@off-2, 3] != '-->'
+				while @off < @str.length and @str[@off-3, 3] != '-->'
 					cmt << parser_readuntil(?> => true)
 					cmt << getc
 				end
