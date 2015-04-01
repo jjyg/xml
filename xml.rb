@@ -211,15 +211,16 @@ class Parser
 			# discard UTF-8 BOM marker
 			@off = 3
 		elsif @off == 0 and (@str[0, 2] == [0xff, 0xfe].pack('C*') or @str[0, 2] == [0x3c, 0x00].pack('C*'))
-			# downgrade UTF-16 (with or without BOM)
+			# downgrade UTF-16
+			if @str[0, 2] == [0xff, 0xfe].pack('C*')
+				# discard BOM
+				@str = @str[2..-1]
+			end
+
 			if @str.respond_to?(:encoding)
 				@str = @str.force_encoding('utf-16le').encode('utf-8').force_encoding('binary')
 			else
-				# rb1.8 compat?
-				if @str[0, 2] == [0xff, 0xfe].pack('C*')
-					# skip BOM
-					@str = @str[2..-1]
-				end
+				# rb1.8 compat
 				@str = @str.unpack('v*').map { |c| (c < 0 || c > 255) ? 63 : c }.pack('C*')
 			end
 		end
@@ -293,7 +294,8 @@ class Parser
 	end
 
 	WhiteSpaces = { ?\  => true, ?\n => true, ?\r => true, ?\t => true }
-
+	WSTagName = WhiteSpaces.merge ?/ => true, ?> => true
+	WSAttrName = WSTagName.merge ?= => true
 	# parse one xml element (string or <> thing)
 	# allows anything as tag name
 	def parse_element
@@ -301,11 +303,11 @@ class Parser
 			# new tag
 			tag = Tag.new('')
 			getc
-			parser_skipspaces
+			c = parser_skipspaces
 
 			# allow / as 1st byte only, to handle </tag> and <tag/>
-			tag.name << getc if @str[@off] == ?/
-			tag.name << parser_readuntil(WhiteSpaces.merge ?/ => true, ?> => true)
+			tag.name << getc if c == ?/
+			tag.name << parser_readuntil(WSTagName)
 
 			if tag.name == '!--'
 				# xml comment
@@ -334,50 +336,42 @@ class Parser
 
 		else
 			# string, read everything until next tag opening
-			e = ''
-			while @off < @str.length
-				break if @str[@off] == ?<
-				e << getc
-			end
-			Xml.entities_decode(e)
+			Xml.entities_decode(parser_readuntil(?< => true))
 		end
 	end
 
 	# parse one tag attribute
 	# also handle the uniq /> close tag
 	def parse_attribute(tag)
-		parser_skipspaces
-		return unless @off < @str.length
-
-		case @str[@off]
+		case parser_skipspaces
+		when nil
+			return
 		when ?>
 			# done
 		when ?/
 			# ensure what follows is '>'
 			getc
-			parser_skipspaces
-			raise self, "expected /> in <#{tag.name}" if @str[@off] != ?>
+			c = parser_skipspaces
+			raise self, "expected /> in <#{tag.name}" if c != ?>
 			tag.set_uniq
 
 		when ?a..?z, ?A..?Z
 			# attribute
-			attr_name = parser_readuntil(WhiteSpaces.merge ?> => true, ?/ => true, ?= => true)
+			attr_name = parser_readuntil(WSAttrName)
 			raise self, "invalid attribute #{attr_name.inspect} in <#{tag.name}" if attr_name !~ /^[a-zA-Z0-9_$:.-]+$/
 
-			parser_skipspaces
-			case @str[@off]
+			case parser_skipspaces
 			when ?=
 				# attribute = "value"
 				getc	# consume '='
-				parser_skipspaces
-				case @str[@off]
+				case parser_skipspaces
 				when ?', ?"
 					sep = getc	# consume sep
 					attr_value = parser_readuntil(sep => true)
 					sep = getc	# consume closing sep
 					raise self, "unclosed quote in <#{tag.name} #{attr_name}=" if sep == ''
 				else
-					attr_value = parser_readuntil(WhiteSpaces.merge ?> => true, ?/ => true)
+					attr_value = parser_readuntil(WSTagName)
 				end
 			else
 				attr_value = attr_name
@@ -394,29 +388,37 @@ class Parser
 	end
 
 	# advance @off until @str[@off] is not whitespace
+	# return first non-whitespace (nonconsumed) character
 	def parser_skipspaces
 		while @off < @str.length
-			break if not WhiteSpaces[@str[@off]]
-			getc
+			c = @str[@off]
+			return c if not WhiteSpaces[c]
+			@off += 1
+			@lineno += 1 if c == ?\n
 		end
+		nil
 	end
 
 	# return the string formed by any char except those in the hash argument
 	def parser_readuntil(charlist)
-		s = ''
+		start_off = @off
 		while @off < @str.length
-			break if charlist[@str[@off]]
-			s << getc
+			c = @str[@off]
+			break if charlist[c]
+			@off += 1
+			@lineno += 1 if c == ?\n
 		end
-		s
+		@str[start_off...@off]
 	end
 
 	# read one byte, advance @off
 	# return empty string after EOF
+	# count lineno
 	def getc
+		return '' if not c = @str[@off]
 		@off += 1
-		@lineno += 1 if @str[@off-1] == ?\n
-		@str[@off-1] || ''
+		@lineno += 1 if c == ?\n
+		c
 	end
 
 	class ParseError < RuntimeError
