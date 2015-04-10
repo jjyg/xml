@@ -273,7 +273,7 @@ class Parser
 					parse_stack.pop
 
 				else
-					raise self, "invalid tag name #{e}" if e.name !~ /^[a-zA-Z]\w*$/
+					raise self, "invalid tag name #{e}" if e.name !~ /^[a-zA-Z][\w:-]*$/
 
 					if parse_stack.empty?
 						raise self, "multiple roots?" if @root.name
@@ -428,4 +428,9 @@ class Parser
 		ParseError.new("Xml syntax error near line #@lineno, before #{@str[@off, 8].inspect}: #{msg}")
 	end
 end
+end
+
+begin
+	require File.expand_path('../xml_parser', __FILE__)
+rescue LoadError
 end

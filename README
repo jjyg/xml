@@ -18,3 +18,6 @@ end
 
 puts root
 # <?xml version="1.0" encoding="us-ascii" ?><bla some_attr="0"><foo key="value></foo>lolz</bla>
+
+Optional native parser:
+if you need to handle large xml files, compile the C extension in ext/ (simply run make) and copy the generated .so in the same directory as xml.rb
