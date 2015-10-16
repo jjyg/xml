@@ -76,15 +76,47 @@ do { \
 					if ( off > off_start + 3 && str[off - 2] == '-' && str[off - 3] == '-' )
 						break;
 				} else
-					break;
+					do_raise( "unterminated comment" );
 			}
 
 			/* ret = ::Xml::Comment.new(cmt) */
-			unsigned long off_end = off; /* off may be EOF */
-			if ( str[off_end - 1] == '>' && str[off_end - 2] == '-' && str[off_end - 3] )
+			unsigned long off_end = off;
+			if ( str[off_end - 1] == '>' && str[off_end - 2] == '-' && str[off_end - 3] == '-')
 				off_end -= 3;
 
 			ret = rb_funcall( cCmt, id_new, 1, rb_str_new( str + off_start, off_end - off_start ) );
+		}
+		else if ( str[off_start] == '!' && str[off_start + 1] == '[' &&
+				( str[off_start + 2] == 'c' || str[off_start + 2] == 'C') &&
+				( str[off_start + 3] == 'd' || str[off_start + 3] == 'D') &&
+				( str[off_start + 4] == 'a' || str[off_start + 4] == 'A') &&
+				( str[off_start + 5] == 't' || str[off_start + 5] == 'T') &&
+				( str[off_start + 6] == 'a' || str[off_start + 6] == 'A') &&
+				str[off_start + 7] == '[' )
+		{
+			/* <![cdata[lol]]> */
+			off_start += 8;
+
+			for (;;) {
+				/* scan for end tag, but keep lineno up to date */
+				off += strcspn( str + off, "\n>" );
+				if ( str[off] == '\n' ) {
+					++off;
+					++lineno;
+				} else if ( str[off] == '>' ) {
+					++off;
+					if ( off > off_start + 3 && str[off - 2] == ']' && str[off - 3] == ']' )
+						break;
+				} else
+					do_raise( "unterminated CDATA" );
+			}
+
+			/* ret = ::String.new(cdata) */
+			unsigned long off_end = off;
+			if ( str[off_end - 1] == '>' && str[off_end - 2] == ']' && str[off_end - 3] == ']' )
+				off_end -= 3;
+
+			ret = rb_str_new( str + off_start, off_end - off_start );
 		}
 		else
 		{

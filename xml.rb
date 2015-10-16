@@ -8,17 +8,30 @@ module Xml
 		'>' => '&gt;',
 		'<' => '&lt;',
 		'"' => '&quot;',
+		'&' => '&amp;',
 	}
 	EntitiesRE = Regexp.new('(' << Entities.keys.join('|') << ')')
 	EntitiesDec = Entities.invert
-	EntitiesDecRE = Regexp.new('(' << EntitiesDec.keys.join('|') << ')', Regexp::IGNORECASE)
+	EntitiesDecRE = /&\w+;?/
+
+	@@raise_on_bad_entity = false
+	def self.raise_on_bad_entity=(b) ; @@raise_on_bad_entity = b ; end
+	def self.raise_on_bad_entity ; @@raise_on_bad_entity ; end
 
 	def self.entities_encode(str)
 		str.to_s.gsub(EntitiesRE) { |x| Entities.fetch(x, x) }
 	end
 
 	def self.entities_decode(str)
-		str.to_s.gsub(EntitiesDecRE) { |x| EntitiesDec.fetch(x, x) }
+		str.to_s.gsub(EntitiesDecRE) { |x|
+			EntitiesDec.fetch(x) {
+				if @@raise_on_bad_entity
+					raise "Invalid XML entity #{x.inspect}"
+				else
+					x
+				end
+			}
+		}
 	end
 
 
@@ -316,8 +329,17 @@ class Parser
 					cmt << parser_readuntil(?> => true)
 					cmt << getc
 				end
-				cmt.chop! ; cmt.chop! ; cmt.chop!
-				return Comment.new(cmt.strip)
+				raise self, "unterminated comment" if @off >= @str.length
+				return Comment.new(cmt.chop.chop.chop.strip)
+			elsif tag.name[0, 8].downcase == '![cdata['
+				s = tag.name[8..-1]
+				while @off < @str.length and @str[@off-3, 3] != ']]>'
+					s << parser_readuntil(?> => true)
+					s << getc
+				end
+				raise self, "unterminated CDATA" if @off >= @str.length
+				# do not decode xmlentities !
+				return s.chop.chop.chop.strip
 			end
 
 			while @off < @str.length
@@ -325,7 +347,7 @@ class Parser
 				case @str[@off]
 				when nil
 					# EOF
-					raise self, "unterminated tag #{tag.name}"
+					raise self, "unclosed tag <#{tag.name}"
 				when ?>
 					getc
 					break
