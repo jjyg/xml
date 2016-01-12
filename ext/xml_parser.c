@@ -246,5 +246,7 @@ void Init_xml_parser(void)
 	id_set_uniq = rb_intern( "set_uniq" );
 	id_entities_decode = rb_intern( "entities_decode" );
 	id_aset = rb_intern( "[]=" );
-	rb_define_method( rb_const_get( cXml, rb_intern( "Parser" ) ), "parse_element", rbxml_parse_element, 0 );
+	VALUE p = rb_const_get( cXml, rb_intern( "Parser" ) );
+	rb_undef_method( p, "parse_element" );
+	rb_define_method( p, "parse_element", rbxml_parse_element, 0 );
 }
