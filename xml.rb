@@ -12,22 +12,26 @@ module Xml
 	}
 	EntitiesRE = Regexp.new('(' << Entities.keys.join('|') << ')')
 	EntitiesDec = Entities.invert
-	EntitiesDecRE = /&\w+;?/
+	EntitiesDecRE = /&#?\w+;?/
 
 	@@raise_on_bad_entity = false
 	def self.raise_on_bad_entity=(b) ; @@raise_on_bad_entity = b ; end
 	def self.raise_on_bad_entity ; @@raise_on_bad_entity ; end
 
 	def self.entities_encode(str)
-		str.to_s.gsub(EntitiesRE) { |x| Entities.fetch(x, x) }
+		str.to_s.gsub(EntitiesRE) { |x| Entities.fetch(x, x) }.gsub(/[\x80-\xff]/n) { |x| '&#x%02X;' % x.ord }
 	end
 
 	def self.entities_decode(str)
 		str.to_s.gsub(EntitiesDecRE) { |x|
 			EntitiesDec.fetch(x) {
-				if @@raise_on_bad_entity
-					raise "Invalid XML entity #{x.inspect}"
+				case x
+				when /^&#(\d{1,3});/
+					$1.to_i.chr
+				when /^&#x([0-9a-fA-F]{1,2});/
+					$1.to_i(16).chr
 				else
+					raise "Invalid XML entity #{x.inspect}" if @@raise_on_bad_entity
 					x
 				end
 			}
@@ -142,7 +146,12 @@ class Tag
 			s << "\n" << indent unless @children.last.kind_of?(::String)
 			s << '</' << @name << '>'
 		else
-			s << @children.map { |c| c.to_s }.join << '</' << @name << '>'
+			s << @children.map { |c|
+				case c
+				when ::String; Xml.entities_encode(c)
+				else c.to_s
+				end
+			}.join << '</' << @name << '>'
 		end
 	end
 
