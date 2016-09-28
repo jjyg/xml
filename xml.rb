@@ -331,9 +331,10 @@ class Parser
 			tag.name << getc if c == ?/
 			tag.name << parser_readuntil(WSTagName)
 
-			if tag.name == '!--'
+			if tag.name[0, 3] == '!--'
 				# xml comment
-				cmt = '' << getc << getc
+				cmt = tag.name[3..-1]
+				3.times { cmt << getc if cmt.length < 3 }
 				while @off < @str.length and @str[@off-3, 3] != '-->'
 					cmt << parser_readuntil(?> => true)
 					cmt << getc

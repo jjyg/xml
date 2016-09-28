@@ -73,7 +73,7 @@ do { \
 					++lineno;
 				} else if ( str[off] == '>' ) {
 					++off;
-					if ( off > off_start + 3 && str[off - 2] == '-' && str[off - 3] == '-' )
+					if ( off > off_start + 2 && str[off - 2] == '-' && str[off - 3] == '-' )
 						break;
 				} else
 					do_raise( "unterminated comment" );
